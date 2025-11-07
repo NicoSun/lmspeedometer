@@ -1,0 +1,16 @@
+{
+  "testprompts": [
+    {
+      "type": "short",
+      "text": "Count to 12!"
+    },
+    {
+      "type": "medium",
+      "text": "Write a Python Script which assigns a mood to a unicorn for each month of the year."
+    },
+    {
+      "type": "long",
+      "text": "Write a Python script which calculates compley numbers up 1000."
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+Model,Tokens,Speed (t/s),StopReason
+openai/gpt-oss-20b,672,4.38,eosFound
+phi-4,237,5.6,eosFound
+gemma-3-12b-it,708,5.74,eosFound

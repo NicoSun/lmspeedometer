@@ -9,23 +9,25 @@ import time
 import json
 
 
-def tokenspeed(model):
+def tokenspeed(model,length):
     with lms.Client() as client:
         model = lms.llm(model)
-        
+
+        prompt = testprompts.return_prompt(length)
+
         start = time.time()
-        result = model.respond("Can unicorns summon rainbows? Answer in 150 tokens, +-10%")
+        result = model.respond(prompt)
         end = time.time()
         tokens = result.stats.predicted_tokens_count
         tokensecond = round(tokens / (end - start),2)
         
-        print(result)
+        # print(result)
         # `result` is the response from the model.
         print("Model used:", result.model_info.display_name)
         print("Predicted tokens:", result.stats.predicted_tokens_count)
         print("Speed:", tokensecond, "t/s")
         print("Stop reason:", result.stats.stop_reason)
-        result_dict = {"tokens":result.stats.predicted_tokens_count,"speed":tokensecond,"stop":result.stats.stop_reason}
+        result_dict = {"tokens":result.stats.predicted_tokens_count,"speed":tokensecond,"stop":result.stats.stop_reason, "result":result}
         return result_dict
 
 def model_loading_test(model):
@@ -69,22 +71,28 @@ def load_available_models():
     return models
 
 
-def load_test_prompts(file_path="testprompts.json"):
-    # Open the file in read mode
-    with open(file_path, 'r') as file:
-        # Load the JSON data from the file
-        data = json.load(file)
+class Testprompts:
+    def __init__(self):
+        self.prompts = {}
+        self.load_test_prompts()
 
-    # Accessing and printing each entry
-    for entry in data['testprompts']:
-        print(f"Type: {entry['type']}")
-        print(f"Text: {entry['text']}\n")
+    def load_test_prompts(self,file_path="testprompts.json"):
+        # Open the file in read mode
+        with open(file_path, 'r') as file:
+            # Load the JSON data from the file
+            data = json.load(file)
 
+        for entry in data['testprompts']:
+            self.prompts[entry['type']] = entry['text']
+        
+    def return_prompt(self, length):
+        return self.prompts[length]
 
-# tokenspeed("gemma-3-12b-it")
-# load_test_prompts()
+    def print_testprompts(self):
+        # Accessing and printing each entry
+        print(self.prompts)
+
+testprompts = Testprompts()
+
+# tokenspeed("gemma-3-12b-it", "short")
 # load_available_models()
-
-# model_loading_test("gemma-3-12b-it")
-# model_loading_test("openai/gpt-oss-20b")
-# model_loading_test("qwen3-32b")

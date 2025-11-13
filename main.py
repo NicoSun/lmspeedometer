@@ -1,7 +1,8 @@
 import sys
-from PySide6.QtWidgets import QHeaderView, QApplication, QMainWindow, QTableView, QPushButton, QVBoxLayout, QWidget, QMessageBox, QHBoxLayout, QLabel
+from PySide6.QtWidgets import QHeaderView, QApplication, QMainWindow, QTableView, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QMessageBox, QLabel
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QFont
+from functools import partial
 
 import lm_studio_interface
 import benchexport
@@ -52,27 +53,45 @@ class LMSpeedometer(QMainWindow):
 
         # Add a submit button
         ssd_button = QPushButton("SSD Test")
-        token_button = QPushButton("Token Test")
         select_all_button = QPushButton("Select All")
         unselect_all_button = QPushButton("UnSelect All")
 
+        token_header_layout = QHBoxLayout()
+        header_label = QLabel("Token Test")
+        token_header_layout.addStretch()  # Add stretch to push content to the center
+        token_header_layout.addWidget(header_label)
+        token_header_layout.addStretch()  # Add another stretch to balance it
+
+        token_button_layout = QHBoxLayout()
+        token_button_short = QPushButton("Short")
+        token_button_medium = QPushButton("Medium")
+        token_button_long = QPushButton("Long")
+
+        token_button_layout.addWidget(token_button_short)
+        token_button_layout.addWidget(token_button_medium)
+        token_button_layout.addWidget(token_button_long)
+
         # Connect the button's clicked signal to the slot that prints selected items
         ssd_button.clicked.connect(self.ssd_test)
-        token_button.clicked.connect(self.token_test)
         select_all_button.clicked.connect(self.select_all_items)
         unselect_all_button.clicked.connect(self.unselect_all_items)
 
-        # Layout setup
-        layout = QVBoxLayout()
-        layout.addWidget(unselect_all_button)
-        layout.addWidget(select_all_button)
+        token_button_short.clicked.connect(partial(self.token_test,'short'))
+        token_button_medium.clicked.connect(partial(self.token_test,'medium'))
+        token_button_long.clicked.connect(partial(self.token_test,'long'))
 
-        layout.addWidget(self.table_view)
-        layout.addWidget(ssd_button)
-        layout.addWidget(token_button)
+        # Layout setup
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(unselect_all_button)
+        main_layout.addWidget(select_all_button)
+
+        main_layout.addWidget(self.table_view)
+        main_layout.addWidget(ssd_button)
+        main_layout.addLayout(token_header_layout)
+        main_layout.addLayout(token_button_layout)
 
         central_widget = QWidget()
-        central_widget.setLayout(layout)
+        central_widget.setLayout(main_layout)
         
         self.setCentralWidget(central_widget)
 
@@ -154,9 +173,10 @@ class LMSpeedometer(QMainWindow):
         self.setCentralWidget(details_widget)
         self.resize(800, 600)
 
-    def token_test(self):
+    def token_test(self,length):
         selected_items = []
 
+        print(length)
         # Iterate over each item in the model and check if it is checked
         for row in range(self.model.rowCount()):
             checkbox_item = self.model.item(row, 0)  # Get checkbox item
@@ -175,10 +195,12 @@ class LMSpeedometer(QMainWindow):
         additional_data_model.setHorizontalHeaderLabels(tableheader)
 
         datalist = [tableheader]
+        resultlist = ["Model","Result"]
         # Populate the additional data table with details
         for item in selected_items:
-            result_dict = lm_studio_interface.tokenspeed(item)
+            result_dict = lm_studio_interface.tokenspeed(item,length)
             datalist.append([item,result_dict["tokens"],result_dict["speed"],result_dict["stop"]])
+            resultlist.append([item,result_dict["result"]])
             
             # convert results to strings for table
             dict_strings = {k: str(v) for k, v in result_dict.items()}
@@ -188,8 +210,11 @@ class LMSpeedometer(QMainWindow):
                    QStandardItem(dict_strings["stop"])]
             additional_data_model.appendRow(row)
 
-        filename = 'tokenbench'
-        benchexport.export_csv(filename, datalist)
+        filename_token = f'tokenbench_{length}'
+        filename_result = f'resultbench_{length}'
+        benchexport.export_csv(filename_token, datalist)
+        # benchexport.export_csv(filename_result, resultlist)
+        
         # Create a table view to display the additional data
         additional_table_view = QTableView()
         additional_table_view.setModel(additional_data_model)

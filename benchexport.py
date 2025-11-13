@@ -6,7 +6,7 @@ def export_csv(filename, datalist):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     # Specify the CSV file name
     csv_file_name = f"{filename}_{timestamp}.csv"
-    folder = "../benchmarks"
+    folder = "benchmarks"
     file_path = os.path.join(folder, csv_file_name)
 
     # Write to CSV using csv.writer

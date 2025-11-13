@@ -10,7 +10,7 @@
     },
     {
       "type": "long",
-      "text": "Write a Python script which calculates compley numbers up 1000."
+      "text": "Write a Python script which calculates complex numbers up 1000."
     }
   ]
 }

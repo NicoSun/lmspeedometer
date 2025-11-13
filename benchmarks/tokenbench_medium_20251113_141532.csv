@@ -1,0 +1,2 @@
+Model,Tokens,Speed (t/s),StopReason
+phi-4,424,7.85,eosFound

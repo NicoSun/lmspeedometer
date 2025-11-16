@@ -2,7 +2,7 @@
   "testprompts": [
     {
       "type": "short",
-      "text": "Count to 12!"
+      "text": "Count from 1 to 12"
     },
     {
       "type": "medium",

@@ -1,16 +1,5 @@
 {
-  "testprompts": [
-    {
-      "type": "short",
-      "text": "Count from 1 to 12"
-    },
-    {
-      "type": "medium",
-      "text": "Write a Python Script which assigns a mood to a unicorn for each month of the year."
-    },
-    {
-      "type": "long",
-      "text": "code a snake game in C++"
-    }
-  ]
+    "short": "Count from 1 to 12",
+    "medium": "Write a Python Script which assigns a mood to a unicorn for each month of the year.",
+    "long": "code a snake game in C++"
 }

@@ -32,7 +32,7 @@ class Worker(QThread):
         tableheader = ["Model", "Time (s)", "Size (MB)", "Speed (MB/s)"]
         datalist = [tableheader]
         for item in self.selected_items:
-            result_dict = lm_studio_interface.model_loading_test(item)
+            result_dict = app_window.benchmarks.model_loading_test(item)
             datalist.append([item,result_dict["duration"],result_dict["size"],result_dict["transfer"]])
 
         filename = 'drivebench'
@@ -44,7 +44,7 @@ class Worker(QThread):
         datalist = [tableheader]
         resultlist = ["Model","Result"]
         for item in self.selected_items:
-            result_dict = lm_studio_interface.tokenspeed(item,length)
+            result_dict = app_window.benchmarks.tokenspeed(item,length)
             datalist.append([item,result_dict["tokens"],result_dict["speed"],result_dict["stop"]])
             resultlist.append([item,result_dict["result"]])
 
@@ -89,11 +89,35 @@ class ResultDialog(QDialog):
 class LMSpeedometer(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.setWindowTitle("LM Speedometer")
         # store per-button worker references to avoid GC and to track running state
         self.workers = {}  # per-button worker references
         self.benchbuttons = [] # list of buttons for easy enable/disable
 
-        self.setWindowTitle("LM Speedometer")
+        #check LM Studio Conenction
+        lm_connection = False
+        try:
+            self.benchmarks = lm_studio_interface.LmBenchmarks()
+            lm_connection = True
+        except Exception as e:
+            self.create_lm_connection_error(e)
+            return
+
+        #if connection, create main window
+        if lm_connection:
+            self.create_main_window()
+
+    def create_lm_connection_error(self, error_message):
+        layout = QVBoxLayout(self)
+        message = QLabel(f"{error_message}")
+        layout.addWidget(message)
+
+        central_widget = QWidget()
+        central_widget.setLayout(layout)
+        
+        self.setCentralWidget(central_widget)
+
+    def create_main_window(self):
         self.setGeometry(100, 100, 600, 400)
 
         # Create a standard item model to hold the data
@@ -103,7 +127,7 @@ class LMSpeedometer(QMainWindow):
         self.model.setHorizontalHeaderLabels(["Select", "Model","Status"])
 
         # Example items
-        models = lm_studio_interface.load_available_models()
+        models = self.benchmarks.load_available_models()
 
         models_names = [name.model_key for name in models]
 
@@ -270,6 +294,6 @@ class LMSpeedometer(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = LMSpeedometer()
-    window.show()
+    app_window = LMSpeedometer()
+    app_window.show()
     sys.exit(app.exec())

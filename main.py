@@ -1,17 +1,97 @@
 import sys
-from PySide6.QtWidgets import QHeaderView, QApplication, QMainWindow, QTableView, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QMessageBox, QLabel
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QHeaderView, QApplication, QMainWindow, QTableView, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QMessageBox, QLabel, QDialog
+from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QFont
 from functools import partial
 
 import lm_studio_interface
 import benchexport
 
+class Worker(QThread):
+    finished_signal = Signal(str,list)  # emit elapsed seconds
+
+    def __init__(self, task, selected_items):
+        super().__init__()
+        self.task = task
+        self.selected_items = selected_items
+        self._running = True
+
+    def run(self):
+        
+        if self.task == 'ssd':
+            datalist = self.ssd_test()
+        elif self.task != 'ssd':
+            datalist = self.token_test(self.task)
+
+        self.finished_signal.emit(self.task,datalist)
+
+    def stop(self):
+        self._running = False
+
+    def ssd_test(self):
+        tableheader = ["Model", "Time (s)", "Size (MB)", "Speed (MB/s)"]
+        datalist = [tableheader]
+        for item in self.selected_items:
+            result_dict = lm_studio_interface.model_loading_test(item)
+            datalist.append([item,result_dict["duration"],result_dict["size"],result_dict["transfer"]])
+
+        filename = 'drivebench'
+        benchexport.export_csv(filename, datalist)
+        return datalist
+
+    def token_test(self, length):
+        tableheader = ["Model", "Tokens", "Speed (t/s)", "StopReason"]
+        datalist = [tableheader]
+        resultlist = ["Model","Result"]
+        for item in self.selected_items:
+            result_dict = lm_studio_interface.tokenspeed(item,length)
+            datalist.append([item,result_dict["tokens"],result_dict["speed"],result_dict["stop"]])
+            resultlist.append([item,result_dict["result"]])
+
+        filename_token = f'tokenbench_{length}'
+        filename_result = f'resultbench_{length}'
+        benchexport.export_csv(filename_token, datalist)
+        # benchexport.export_csv(filename_result, resultlist)
+        return datalist
+
+class ResultDialog(QDialog):
+    def __init__(self, task: str, datalist: list, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Benchmark Result {task}")
+        self.setModal(True)
+        self.setGeometry(100, 100, 444, 400)
+        result_layout = QVBoxLayout(self)
+        # table_layout = QHBoxLayout(self)
+
+        additional_data_model = QStandardItemModel()
+
+        for sublist in datalist:
+            # convert results to strings for table
+            datalist_strings = [str(value) for value in sublist]
+            row = [QStandardItem(datalist_strings[0]), 
+                    QStandardItem(datalist_strings[1]), 
+                    QStandardItem(datalist_strings[2]), 
+                    QStandardItem(datalist_strings[3])]
+            additional_data_model.appendRow(row)
+
+        # Create a table view to display the result data
+        additional_table_view = QTableView()
+        additional_table_view.setModel(additional_data_model)
+        result_layout.addWidget(additional_table_view)
+        
+        btn_close = QPushButton("Close", self)
+        btn_close.clicked.connect(self.accept)      
+  
+        # result_layout.addLayout(table_layout)
+        result_layout.addWidget(btn_close)
+        
 
 class LMSpeedometer(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.checked = False
+        # store per-button worker references to avoid GC and to track running state
+        self.workers = {}  # per-button worker references
+        self.benchbuttons = [] # list of buttons for easy enable/disable
 
         self.setWindowTitle("LM Speedometer")
         self.setGeometry(100, 100, 600, 400)
@@ -51,10 +131,14 @@ class LMSpeedometer(QMainWindow):
         item_delegate = self.create_item_delegate(14)
         self.table_view.setItemDelegateForColumn(2, item_delegate)
 
-        # Add a submit button
-        ssd_button = QPushButton("SSD Test")
+        # Add LLM Selection Buttons
         select_all_button = QPushButton("Select All")
         unselect_all_button = QPushButton("UnSelect All")
+        select_all_button.clicked.connect(self.select_all_items)
+        unselect_all_button.clicked.connect(self.unselect_all_items)
+
+        # Add a benchmark buttons
+        ssd_button = QPushButton("SSD Test")
 
         token_header_layout = QHBoxLayout()
         header_label = QLabel("Token Test")
@@ -71,14 +155,15 @@ class LMSpeedometer(QMainWindow):
         token_button_layout.addWidget(token_button_medium)
         token_button_layout.addWidget(token_button_long)
 
-        # Connect the button's clicked signal to the slot that prints selected items
-        ssd_button.clicked.connect(self.ssd_test)
-        select_all_button.clicked.connect(self.select_all_items)
-        unselect_all_button.clicked.connect(self.unselect_all_items)
+        self.benchbuttons.append(ssd_button)
+        self.benchbuttons.append(token_button_short)
+        self.benchbuttons.append(token_button_medium)
+        self.benchbuttons.append(token_button_long)
 
-        token_button_short.clicked.connect(partial(self.token_test,'short'))
-        token_button_medium.clicked.connect(partial(self.token_test,'medium'))
-        token_button_long.clicked.connect(partial(self.token_test,'long'))
+        ssd_button.clicked.connect(partial(self.bench_button_clicked,'ssd', ssd_button))
+        token_button_short.clicked.connect(partial( self.bench_button_clicked,'short', token_button_short))
+        token_button_medium.clicked.connect(partial(self.bench_button_clicked,'medium', token_button_medium))
+        token_button_long.clicked.connect(partial(self.bench_button_clicked,'long', token_button_long))
 
         # Layout setup
         main_layout = QVBoxLayout()
@@ -94,6 +179,54 @@ class LMSpeedometer(QMainWindow):
         central_widget.setLayout(main_layout)
         
         self.setCentralWidget(central_widget)
+
+    @Slot()
+    def bench_button_clicked(self,task, button: QPushButton):
+        # If any worker is running, ignore (shouldn't happen if we disabled)
+        if any(w.isRunning() for w in self.workers.values()):
+            return
+
+        # Set all buttons to busy/disabled
+        self.set_all_buttons_busy(True, active_button=button)
+
+        selected_items = self.get_selected_items()
+        worker = Worker(task, selected_items)
+        worker.finished_signal.connect(partial(self.on_task_finished, button))
+        self.workers[button] = worker
+        worker.start()
+
+    @Slot(object, float)
+    def on_task_finished(self, button: QPushButton, task: str, datalist: list):
+        # Clean up worker
+        worker = self.workers.get(button)
+        if worker:
+            worker.quit()
+            worker.wait()
+            del self.workers[button]
+
+        # Re-enable all buttons and restore texts/styles
+        self.set_all_buttons_busy(False)
+
+        # Show result dialog (non-blocking)
+        dlg = ResultDialog(task, datalist, parent=self)
+        dlg.show()
+
+    def set_all_buttons_busy(self, busy: bool, active_button: QPushButton | None = None):
+        if busy:
+            for btn in self.benchbuttons:
+                # show which one started the work
+                if btn is active_button:
+                    btn.setText(f"{btn.text()} (Active...)")
+                else:
+                    btn.setText(btn.text())  # keep label; could add suffix if desired
+                btn.setStyleSheet("background-color: #d9534f; color: white;")
+                btn.setEnabled(False)
+        else:
+            for btn in self.benchbuttons:
+                # remove suffix if present
+                btn.setText(btn.text().replace(" (Active...)", ""))
+                btn.setStyleSheet("")
+                btn.setEnabled(True)
 
     def create_item_delegate(self, font_size):
         from PySide6.QtWidgets import QStyledItemDelegate
@@ -118,10 +251,8 @@ class LMSpeedometer(QMainWindow):
             checkbox_item = self.model.item(row, 0)  # Get checkbox item
             checkbox_item.setCheckState(Qt.Unchecked)
 
-
-    def ssd_test(self):
+    def get_selected_items(self):
         selected_items = []
-
         # Iterate over each item in the model and check if it is checked
         for row in range(self.model.rowCount()):
             checkbox_item = self.model.item(row, 0)  # Get checkbox item
@@ -135,102 +266,7 @@ class LMSpeedometer(QMainWindow):
             QMessageBox.warning(self, "No Selections", "Please select at least one model.")
             return
 
-        
-        tableheader = ["Model", "Time (s)", "Size (MB)", "Speed (MB/s)"]
-        additional_data_model = QStandardItemModel()
-        additional_data_model.setHorizontalHeaderLabels(tableheader)
-
-        datalist = [tableheader]
-        # Populate the additional data table with details
-        for item in selected_items:
-            result_dict = lm_studio_interface.model_loading_test(item)
-            datalist.append([item,result_dict["duration"],result_dict["size"],result_dict["transfer"]])
-            
-            # convert results to strings for table
-            dict_strings = {k: str(v) for k, v in result_dict.items()}
-            row = [QStandardItem(item), 
-                   QStandardItem(dict_strings["duration"]), 
-                   QStandardItem(dict_strings["size"]), 
-                   QStandardItem(dict_strings["transfer"])]
-            additional_data_model.appendRow(row)
-
-        filename = 'drivebench'
-        benchexport.export_csv(filename, datalist)
-        # Create a table view to display the additional data
-        additional_table_view = QTableView()
-        additional_table_view.setModel(additional_data_model)
-
-        # Set up a separate layout for displaying selected items and their details
-        details_label = QLabel("Details of Selected Items:")
-        details_layout = QVBoxLayout()
-        details_layout.addWidget(details_label)
-        details_layout.addWidget(additional_table_view)
-
-        details_widget = QWidget()
-        details_widget.setLayout(details_layout)
-
-        # Adjust window size to accommodate both tables
-        self.setCentralWidget(details_widget)
-        self.resize(800, 600)
-
-    def token_test(self,length):
-        selected_items = []
-
-        print(length)
-        # Iterate over each item in the model and check if it is checked
-        for row in range(self.model.rowCount()):
-            checkbox_item = self.model.item(row, 0)  # Get checkbox item
-            if checkbox_item.checkState() == Qt.Checked:
-                # If the checkbox is checked, get the corresponding text from the second column
-                item_name = self.model.item(row, 1).text()
-                selected_items.append(item_name)
-
-        # Print or show the selected items (can also use QMessageBox to display)
-        if not selected_items:
-            QMessageBox.warning(self, "No Selections", "Please select at least one model.")
-            return
-
-        tableheader = ["Model", "Tokens", "Speed (t/s)", "StopReason"]
-        additional_data_model = QStandardItemModel()
-        additional_data_model.setHorizontalHeaderLabels(tableheader)
-
-        datalist = [tableheader]
-        resultlist = ["Model","Result"]
-        # Populate the additional data table with details
-        for item in selected_items:
-            result_dict = lm_studio_interface.tokenspeed(item,length)
-            datalist.append([item,result_dict["tokens"],result_dict["speed"],result_dict["stop"]])
-            resultlist.append([item,result_dict["result"]])
-            
-            # convert results to strings for table
-            dict_strings = {k: str(v) for k, v in result_dict.items()}
-            row = [QStandardItem(item), 
-                   QStandardItem(dict_strings["tokens"]), 
-                   QStandardItem(dict_strings["speed"]), 
-                   QStandardItem(dict_strings["stop"])]
-            additional_data_model.appendRow(row)
-
-        filename_token = f'tokenbench_{length}'
-        filename_result = f'resultbench_{length}'
-        benchexport.export_csv(filename_token, datalist)
-        # benchexport.export_csv(filename_result, resultlist)
-        
-        # Create a table view to display the additional data
-        additional_table_view = QTableView()
-        additional_table_view.setModel(additional_data_model)
-
-        # Set up a separate layout for displaying selected items and their details
-        details_label = QLabel("Details of Selected Items:")
-        details_layout = QVBoxLayout()
-        details_layout.addWidget(details_label)
-        details_layout.addWidget(additional_table_view)
-
-        details_widget = QWidget()
-        details_widget.setLayout(details_layout)
-
-        # Adjust window size to accommodate both tables
-        self.setCentralWidget(details_widget)
-        self.resize(800, 600)
+        return selected_items
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

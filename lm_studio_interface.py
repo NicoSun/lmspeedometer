@@ -15,9 +15,9 @@ def tokenspeed(model,length):
 
         prompt = testprompts.return_prompt(length)
 
-        start = time.time()
+        start = time.perf_counter()
         result = model.respond(prompt)
-        end = time.time()
+        end = time.perf_counter()
         tokens = result.stats.predicted_tokens_count
         tokensecond = round(tokens / (end - start),2)
         
@@ -40,13 +40,14 @@ def model_loading_test(model):
     time.sleep(1)
 
     with lms.Client() as client:
-        start = time.time()
+        start = time.perf_counter()
         try:
             model = lms.llm(model,ttl=1)
-        except:
+        except Exception as e:
+            print(e)
             #model load error
-            return {"duration":"error","size":"error","transfer":"error"}
-        end = time.time()
+            return {"duration":"error","size":"error","transfer":e}
+        end = time.perf_counter()
         duration = round(end - start,2)
 
         model_info = model.get_info()

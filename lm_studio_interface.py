@@ -9,14 +9,22 @@ import time
 import json
 
 class LmBenchmarks:
+    """ The benchmark class connects to LM Studio and 
+    """
     def __init__(self):
         self.check_lmstudio()
 
     def check_lmstudio(self):
+        '''Checks the LM Studio connection '''
         with lms.Client() as client:
             models = client.llm.list_downloaded()
 
     def tokenspeed(self,model,length):
+        '''Benches the LLM execution speed in token per second
+             Args: llm_model, benchmark_length (short, medium, long)
+
+            Returns: a list of becnhmark results (tokens, speed, stopReason)       
+         '''
         with lms.Client() as client:
             model = lms.llm(model)
 
@@ -38,6 +46,12 @@ class LmBenchmarks:
             return result_dict
 
     def model_loading_test(self,model):
+        '''Benches the LLM loading speed in megabyte per second (MB/s)
+             Args: llm_model
+
+            Returns: a list of becnhmark results (duration (s), size (MB), transfer_rate (MB/s)       
+         '''
+
         try:
             oldmodel = lms.llm()
             oldmodel.unload()
@@ -70,6 +84,7 @@ class LmBenchmarks:
 
     #show available models
     def load_available_models(self):
+        """ Loads all avaliable models for the GUI user selection """
         with lms.Client() as client:
             models = client.llm.list_downloaded()
             models_names = [name.model_key for name in models]
@@ -78,12 +93,17 @@ class LmBenchmarks:
 
 
 class Testprompts:
+    """ A class to load the prompts for benchmarking from benchprompts.json"
+         or create it with default prompts if none exists.
+    """
     def __init__(self):
         self.check_prompt_file()
         self.prompts = {}
-        self.load_test_prompts()
+        self.load_bench_prompts()
 
-    def load_test_prompts(self,file_path="testprompts.json"):
+    def load_bench_prompts(self,file_path="benchprompts.json"):
+        """ Loads the benchmark prompts """
+
         # Open the file in read mode
         with open(file_path, 'r') as file:
             # Load the JSON data from the file
@@ -93,13 +113,16 @@ class Testprompts:
             self.prompts[k] = v
         
     def return_prompt(self, length):
+        """ returns the benchmark prompts """
         return self.prompts[length]
 
     def print_testprompts(self):
+        """ print the benchmark to terminal """
         # Accessing and printing each entry
         print(self.prompts)
 
-    def check_prompt_file(self, file_path="testprompts.json"):
+    def check_prompt_file(self, file_path="benchprompts.json"):
+        """ loads bench prompts from benchprompts.json or creates a new file if it doesn't exist """
         try:
             with open(file_path, 'r') as file:
                 data = json.load(file)

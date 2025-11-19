@@ -8,6 +8,7 @@ import lm_studio_interface
 import benchexport
 
 class Worker(QThread):
+    """ This worker does the benchmark in a seperate thread from the GUI """
     finished_signal = Signal(str,list)  # emit elapsed seconds
 
     def __init__(self, task, selected_items):
@@ -17,9 +18,10 @@ class Worker(QThread):
         self._running = True
 
     def run(self):
+        '''Checks the Becnhmark Selection '''
         
         if self.task == 'ssd':
-            datalist = self.ssd_test()
+            datalist = self.llm_loading_test()
         elif self.task != 'ssd':
             datalist = self.token_test(self.task)
 
@@ -28,7 +30,13 @@ class Worker(QThread):
     def stop(self):
         self._running = False
 
-    def ssd_test(self):
+    def llm_loading_test(self):
+        ''' Benches the model loading time '''
+
+        #Return if no model was selected
+        if not self.selected_items:
+            return
+
         tableheader = ["Model", "Time (s)", "Size (MB)", "Speed (MB/s)"]
         datalist = [tableheader]
         for item in self.selected_items:
@@ -40,6 +48,12 @@ class Worker(QThread):
         return datalist
 
     def token_test(self, length):
+        ''' Benches the model speed in token per second '''
+
+        #Return if no model was selected
+        if not self.selected_items:
+            return
+
         tableheader = ["Model", "Tokens", "Speed (t/s)", "StopReason"]
         datalist = [tableheader]
         resultlist = ["Model","Result"]
@@ -55,6 +69,7 @@ class Worker(QThread):
         return datalist
 
 class ResultDialog(QDialog):
+    """ Shows the Benchmark Result in a new QDialog window """
     def __init__(self, task: str, datalist: list, parent=None):
         super().__init__(parent)
         self.setWindowTitle(f"Benchmark Result {task}")
@@ -87,6 +102,9 @@ class ResultDialog(QDialog):
         
 
 class LMSpeedometer(QMainWindow):
+    """ This is the main GUI class.
+        It includes user interaction buttons and shows the LLMs available for benchmarking
+    """
     def __init__(self):
         super().__init__()
         self.setWindowTitle("LM Speedometer")
@@ -108,6 +126,7 @@ class LMSpeedometer(QMainWindow):
             self.create_main_window()
 
     def create_lm_connection_error(self, error_message):
+        ''' Shows error message if app can't connect to LM Studio '''
         layout = QVBoxLayout(self)
         message = QLabel(f"{error_message}")
         layout.addWidget(message)
@@ -118,6 +137,7 @@ class LMSpeedometer(QMainWindow):
         self.setCentralWidget(central_widget)
 
     def create_main_window(self):
+        ''' Creates the main window '''
         self.setGeometry(100, 100, 600, 400)
 
         # Create a standard item model to hold the data
@@ -162,7 +182,7 @@ class LMSpeedometer(QMainWindow):
         unselect_all_button.clicked.connect(self.unselect_all_items)
 
         # Add a benchmark buttons
-        ssd_button = QPushButton("SSD Test")
+        ssd_button = QPushButton("LLM Loading Test")
 
         token_header_layout = QHBoxLayout()
         header_label = QLabel("Token Test")
@@ -206,6 +226,7 @@ class LMSpeedometer(QMainWindow):
 
     @Slot()
     def bench_button_clicked(self,task, button: QPushButton):
+        ''' Disables all benchmark buttons after a benchmark is started '''
         # If any worker is running, ignore (shouldn't happen if we disabled)
         if any(w.isRunning() for w in self.workers.values()):
             return
@@ -221,6 +242,7 @@ class LMSpeedometer(QMainWindow):
 
     @Slot(object, float)
     def on_task_finished(self, button: QPushButton, task: str, datalist: list):
+        ''' Renenabes becnhmark buttons after task is finished, calls ResultDialog '''
         # Clean up worker
         worker = self.workers.get(button)
         if worker:
@@ -231,11 +253,16 @@ class LMSpeedometer(QMainWindow):
         # Re-enable all buttons and restore texts/styles
         self.set_all_buttons_busy(False)
 
+        #don't show result Dialog for a non Bench
+        if not datalist:
+            return
+
         # Show result dialog (non-blocking)
         dlg = ResultDialog(task, datalist, parent=self)
         dlg.show()
 
     def set_all_buttons_busy(self, busy: bool, active_button: QPushButton | None = None):
+        ''' Disables/Enables benchmark buttons '''
         if busy:
             for btn in self.benchbuttons:
                 # show which one started the work
@@ -266,16 +293,19 @@ class LMSpeedometer(QMainWindow):
         return FontDelegate()
 
     def select_all_items(self):
+        ''' Selects all available models '''
         for row in range(self.model.rowCount()):
             checkbox_item = self.model.item(row, 0)  # Get checkbox item
             checkbox_item.setCheckState(Qt.Checked)
 
     def unselect_all_items(self):
+        ''' Unselects all available models '''
         for row in range(self.model.rowCount()):
             checkbox_item = self.model.item(row, 0)  # Get checkbox item
             checkbox_item.setCheckState(Qt.Unchecked)
 
     def get_selected_items(self):
+        ''' get selected model for benchmark, shows error if none '''
         selected_items = []
         # Iterate over each item in the model and check if it is checked
         for row in range(self.model.rowCount()):

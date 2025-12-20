@@ -7,6 +7,7 @@ Created on Fri Oct 10 22:27:44 2025
 import lmstudio as lms
 import time
 import json
+import os
 
 class LmBenchmarks:
     """ The benchmark class connects to LM Studio and 
@@ -98,6 +99,7 @@ class Testprompts:
     """
     def __init__(self):
         self.check_prompt_file()
+        self.check_benchmark_folder()
         self.prompts = {}
         self.load_bench_prompts()
 
@@ -137,5 +139,10 @@ class Testprompts:
                 json.dump(data, json_file, indent=4)
         except Exception as e:
             print(e)
+            
+    def check_benchmark_folder(self):
+        folder_path = "benchmarks"
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
 
 testprompts = Testprompts()

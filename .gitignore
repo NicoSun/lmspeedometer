@@ -210,3 +210,5 @@ __marimo__/
 # Benchmarks
 benchmarks/*
 !benchmarks/
+lmbench*
+!lmbench/

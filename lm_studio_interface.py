@@ -130,11 +130,10 @@ class Testprompts:
                 data = json.load(file)
         except FileNotFoundError:
             data = {
-            "short": 'Count from 1 to 12',
-            "medium": 'Write a Python Script which assigns a mood to a unicorn for each month of the year.',
-            "long": 'code a snake game in C++'
+            "short": 'Write a python script which assigns a mood to a unicorn for each month of the year.',
+            "medium": 'Write an efficient python program to search for perfect numbers',
+            "long": 'write a basic snake game in C++, the snake is controlled with keyboard arrow keys, the snake is green, the color of the food is random (always high brightness & saturation), each food consumed changes the hue of the snake by 33% '
             }
-
             with open(file_path, 'w') as json_file:
                 json.dump(data, json_file, indent=4)
         except Exception as e:

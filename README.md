@@ -1,6 +1,7 @@
 # lmspeedometer
 A simple Python tool to benchmark LLMs with LM Studio.
 Supports loading speed and token per second.
+Supports custom benchmarkprompts. Simply edit "benchprompts.json"
 
 
 ## Usage

@@ -31,19 +31,19 @@ class LmBenchmarks:
 
             prompt = testprompts.return_prompt(length)
 
-            start = time.perf_counter()
             result = model.respond(prompt)
-            end = time.perf_counter()
             tokens = result.stats.predicted_tokens_count
-            tokensecond = round(tokens / (end - start),2)
+            tokensecond = round(result.stats.tokens_per_second,2)
+            prefill = round(result.stats.prompt_tokens_count / result.stats.time_to_first_token_sec,2)
             
-            # print(result)
+            # print(result.stats)
             # `result` is the response from the model.
             print("Model used:", result.model_info.display_name)
             print("Predicted tokens:", result.stats.predicted_tokens_count)
             print("Speed:", tokensecond, "t/s")
             print("Stop reason:", result.stats.stop_reason)
-            result_dict = {"tokens":result.stats.predicted_tokens_count,"speed":tokensecond,"stop":result.stats.stop_reason, "result":result}
+            result_dict = {"predict tokens":result.stats.predicted_tokens_count,"speed":tokensecond,
+                "prefill":prefill, "result":result}
             return result_dict
 
     def model_loading_test(self,model):
@@ -103,16 +103,18 @@ class Testprompts:
         self.prompts = {}
         self.load_bench_prompts()
 
-    def load_bench_prompts(self,file_path="benchprompts.json"):
+    def load_bench_prompts(self,prompt_path="prompts/benchprompts.json",prefill_path="prompts/summarize_text.txt"):
         """ Loads the benchmark prompts """
 
-        # Open the file in read mode
-        with open(file_path, 'r') as file:
-            # Load the JSON data from the file
+        with open(prompt_path, 'r') as file:
             data = json.load(file)
 
         for k,v in data.items():
             self.prompts[k] = v
+
+        with open(prefill_path, "r", encoding="utf-8") as file:
+            text = file.read()
+        self.prompts["summarize"] = text
         
     def return_prompt(self, length):
         """ returns the benchmark prompts """
@@ -123,7 +125,7 @@ class Testprompts:
         # Accessing and printing each entry
         print(self.prompts)
 
-    def check_prompt_file(self, file_path="benchprompts.json"):
+    def check_prompt_file(self, file_path="prompts/benchprompts.json"):
         """ loads bench prompts from benchprompts.json or creates a new file if it doesn't exist """
         try:
             with open(file_path, 'r') as file:

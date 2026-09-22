@@ -16,3 +16,11 @@ def export_csv(filename, datalist):
         # Write data rows
         for result in datalist:
             writer.writerow(result)
+
+def export_llm_output(filename,data):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{filename}_{timestamp}.txt"
+    folder = "benchmarks/llm_output"
+    file_path = os.path.join(folder, filename)
+    with open(file_path, "w", encoding="utf-8") as file:
+        file.write("\n".join(data))

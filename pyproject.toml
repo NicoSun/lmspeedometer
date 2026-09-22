@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lmspeedometer"
+version = "0.8.0"
+description = "Benchmark loading and running LLMs in LM Studio"
+authors = [
+    {name = "Nico Sun <cryocomputing@gmail.com>"},
+]
+dependencies = [
+    "anyio",
+    "certifi",
+    "h11",
+    "httpcore",
+    "httpx",
+    "httpx-ws",
+    "idna",
+    "lmstudio",
+    "msgspec",
+    "PySide6",
+    "PySide6_Essentials",
+    "shiboken6",
+    "sniffio",
+    "typing_extensions",
+    "wsproto",
+]
+[tool.setuptools.packages.find]
+where = ["."]

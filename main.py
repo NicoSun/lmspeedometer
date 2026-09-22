@@ -1,5 +1,5 @@
 import sys
-from PySide6.QtWidgets import QHeaderView, QApplication, QMainWindow, QTableView, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QMessageBox, QLabel, QDialog
+from PySide6.QtWidgets import QHeaderView, QApplication, QMainWindow, QTableView, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QMessageBox, QLabel, QDialog, QCheckBox
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QFont
 from functools import partial
@@ -11,10 +11,11 @@ class Worker(QThread):
     """ This worker does the benchmark in a seperate thread from the GUI """
     finished_signal = Signal(str,list)  # emit elapsed seconds
 
-    def __init__(self, task, selected_items):
+    def __init__(self, task, selected_items, save_output):
         super().__init__()
         self.task = task
         self.selected_items = selected_items
+        self.save_output = save_output
         self._running = True
 
     def run(self):
@@ -47,25 +48,28 @@ class Worker(QThread):
         benchexport.export_csv(filename, datalist)
         return datalist
 
-    def token_test(self, length):
+    def token_test(self, test_type):
         ''' Benches the model speed in token per second '''
 
         #Return if no model was selected
         if not self.selected_items:
             return
 
-        tableheader = ["Model", "Tokens", "Speed (t/s)", "StopReason"]
+        tableheader = ["Model", "Predict Tokens", "Speed (t/s)", "prefill (estimated)"]
         datalist = [tableheader]
         resultlist = ["Model","Result"]
         for item in self.selected_items:
-            result_dict = app_window.benchmarks.tokenspeed(item,length)
-            datalist.append([item,result_dict["tokens"],result_dict["speed"],result_dict["stop"]])
-            resultlist.append([item,result_dict["result"]])
+            result_dict = app_window.benchmarks.tokenspeed(item,test_type)
+            datalist.append([item,result_dict["predict tokens"],result_dict["speed"],result_dict["prefill"]])
+            resultlist.append(item)
+            resultlist.append(str(result_dict["result"]))
+            resultlist.append("-----"*12)
 
-        filename_token = f'tokenbench_{length}'
-        filename_result = f'resultbench_{length}'
+        filename_token = f'tokenbench_{test_type}'
+        filename_result = f'resultbench_{test_type}'
         benchexport.export_csv(filename_token, datalist)
-        # benchexport.export_csv(filename_result, resultlist)
+        if self.save_output:
+            benchexport.export_llm_output(filename_result, resultlist)
         return datalist
 
 class ResultDialog(QDialog):
@@ -194,20 +198,27 @@ class LMSpeedometer(QMainWindow):
         token_button_short = QPushButton("Short")
         token_button_medium = QPushButton("Medium")
         token_button_long = QPushButton("Long")
+        token_button_summary = QPushButton("Summarize")
+        self.result_checkbox = QCheckBox("save LLM output")
+
 
         token_button_layout.addWidget(token_button_short)
         token_button_layout.addWidget(token_button_medium)
         token_button_layout.addWidget(token_button_long)
+        token_button_layout.addWidget(token_button_summary)
+        token_button_layout.addWidget(self.result_checkbox)
 
         self.benchbuttons.append(ssd_button)
         self.benchbuttons.append(token_button_short)
         self.benchbuttons.append(token_button_medium)
         self.benchbuttons.append(token_button_long)
+        self.benchbuttons.append(token_button_summary)
 
         ssd_button.clicked.connect(partial(self.bench_button_clicked,'ssd', ssd_button))
         token_button_short.clicked.connect(partial( self.bench_button_clicked,'short', token_button_short))
         token_button_medium.clicked.connect(partial(self.bench_button_clicked,'medium', token_button_medium))
         token_button_long.clicked.connect(partial(self.bench_button_clicked,'long', token_button_long))
+        token_button_summary.clicked.connect(partial(self.bench_button_clicked,'summarize', token_button_summary))
 
         # Layout setup
         main_layout = QVBoxLayout()
@@ -234,8 +245,12 @@ class LMSpeedometer(QMainWindow):
         # Set all buttons to busy/disabled
         self.set_all_buttons_busy(True, active_button=button)
 
+        save_output = False
+        if self.result_checkbox.isChecked():
+            save_output = True
+
         selected_items = self.get_selected_items()
-        worker = Worker(task, selected_items)
+        worker = Worker(task, selected_items,save_output)
         worker.finished_signal.connect(partial(self.on_task_finished, button))
         self.workers[button] = worker
         worker.start()

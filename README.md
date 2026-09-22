@@ -1,10 +1,10 @@
 # lmspeedometer
 
-A lightweight Python utility to benchmark Large Language Models (LLMs) using [LM Studio](https://lmstudio.ai/). It measures **prompt processing speed** and **token generation speed**, allowing you to evaluate model performance on your specific hardware.
+A lightweight Python utility to benchmark Large Language Models (LLMs) using [LM Studio](https://lmstudio.ai/). It measures **LLM loading speed**, **prompt processing speed** and **token generation speed**, allowing you to evaluate model performance on your specific hardware.
 
 ## ✨ Features
 
-- 🚀 **Speed Benchmarking**: Accurately measure prompt load time and tokens per second (TPS).
+- 🚀 **Speed Benchmarking**: Accurately measure LLM load times and tokens per second (TPS).
 - 🛠️ **Custom Prompts**: Easily customize benchmark inputs via a simple JSON configuration file.
 - 🖥️ **Simple UI**: Select multiple models to run benchmarks sequentially.
 
